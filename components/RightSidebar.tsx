@@ -21,7 +21,7 @@ const RightSidebar = () => {
   const { audio } = useAudio();
 
   return (
-    <section className={cn('right_sidebar h-[calc(100vh-5px]', {
+    <section className={cn('right_sidebar h-[calc(100vh-5px)]', {
       'h-[calc(100vh-140px)]': audio?.audioUrl
     })}>
       <SignedIn>
