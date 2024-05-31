@@ -19,7 +19,7 @@ const RightSidebar = () => {
   const router = useRouter();
 
   const { audio } = useAudio();
-  if(!topPodcasters) return <LoaderSpinner />
+  // if(!topPodcasters) return <LoaderSpinner />
 
   return (
     <section className={cn('right_sidebar h-[calc(100vh-5px]', {
@@ -46,7 +46,7 @@ const RightSidebar = () => {
       <section className="flex flex-col gap-8 pt-12">
         <Header headerTitle="Top Podcastrs" />
         <div className="flex flex-col gap-6">
-          {topPodcasters?.slice(0, 4).map((podcaster) => (
+          {topPodcasters?.slice(0, 3).map((podcaster) => (
             <div key={podcaster._id} className="flex cursor-pointer justify-between" onClick={() => router.push(`/profile/${podcaster.clerkId}`)}>
               <figure className="flex items-center gap-2">
                 <Image
@@ -59,7 +59,7 @@ const RightSidebar = () => {
                 <h2 className="text-14 font-semibold text-white-1">{podcaster.name}</h2>
               </figure>
               <div className="flex items-center">
-                <p className="text-12 font-normal">{podcaster.totalPodcasts} podcasts</p>
+                <p className="text-12 font-normal text-white-1">{podcaster.totalPodcasts} podcasts</p>
               </div> 
             </div>
           ))}
