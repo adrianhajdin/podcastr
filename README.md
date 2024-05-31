@@ -362,7 +362,824 @@ export default config;
 </details>
 
 <details>
-<summary><code>index.css</code></summary>
+<summary><code>constants/index.ts</code></summary>
+
+```typescript
+export const sidebarLinks = [
+  {
+    imgURL: "/icons/home.svg",
+    route: "/",
+    label: "Home",
+  },
+  {
+    imgURL: "/icons/discover.svg",
+    route: "/discover",
+    label: "Discover",
+  },
+  {
+    imgURL: "/icons/microphone.svg",
+    route: "/create-podcast",
+    label: "Create Podcast",
+  },
+];
+
+export const voiceDetails = [
+  {
+    id: 1,
+    name: "alloy",
+  },
+  {
+    id: 2,
+    name: "echo",
+  },
+  {
+    id: 3,
+    name: "fable",
+  },
+  {
+    id: 4,
+    name: "onyx",
+  },
+  {
+    id: 5,
+    name: "nova",
+  },
+  {
+    id: 6,
+    name: "shimmer",
+  },
+];
+
+export const podcastData = [
+  {
+    id: 1,
+    title: "The Joe Rogan Experience",
+    description: "A long form, in-depth conversation",
+    imgURL:
+      "https://lovely-flamingo-139.convex.cloud/api/storage/3106b884-548d-4ba0-a179-785901f69806",
+  },
+  {
+    id: 2,
+    title: "The Futur",
+    description: "This is how the news should sound",
+    imgURL:
+      "https://lovely-flamingo-139.convex.cloud/api/storage/16fbf9bd-d800-42bc-ac95-d5a586447bf6",
+  },
+  {
+    id: 3,
+    title: "Waveform",
+    description: "Join Michelle Obama in conversation",
+    imgURL:
+      "https://lovely-flamingo-139.convex.cloud/api/storage/60f0c1d9-f2ac-4a96-9178-f01d78fa3733",
+  },
+  {
+    id: 4,
+    title: "The Tech Talks Daily Podcast",
+    description: "This is how the news should sound",
+    imgURL:
+      "https://lovely-flamingo-139.convex.cloud/api/storage/5ba7ed1b-88b4-4c32-8d71-270f1c502445",
+  },
+  {
+    id: 5,
+    title: "GaryVee Audio Experience",
+    description: "A long form, in-depth conversation",
+    imgURL:
+      "https://lovely-flamingo-139.convex.cloud/api/storage/ca7cb1a6-4919-4b2c-a73e-279a79ac6d23",
+  },
+  {
+    id: 6,
+    title: "Syntax ",
+    description: "Join Michelle Obama in conversation",
+    imgURL:
+      "https://lovely-flamingo-139.convex.cloud/api/storage/b8ea40c7-aafb-401a-9129-73c515a73ab5",
+  },
+  {
+    id: 7,
+    title: "IMPAULSIVE",
+    description: "A long form, in-depth conversation",
+    imgURL:
+      "https://lovely-flamingo-139.convex.cloud/api/storage/8a55d662-fe3f-4bcf-b78b-3b2f3d3def5c",
+  },
+  {
+    id: 8,
+    title: "Ted Tech",
+    description: "This is how the news should sound",
+    imgURL:
+      "https://lovely-flamingo-139.convex.cloud/api/storage/221ee4bd-435f-42c3-8e98-4a001e0d806e",
+  },
+];
+```
+
+</details>
+
+<details>
+<summary><code>convex/http.ts</code></summary>
+
+```typescript
+// ===== reference links =====
+// https://www.convex.dev/templates (open the link and choose for clerk than you will get the github link mentioned below)
+// https://github.dev/webdevcody/thumbnail-critique/blob/6637671d72513cfe13d00cb7a2990b23801eb327/convex/schema.ts
+
+import type { WebhookEvent } from "@clerk/nextjs/server";
+import { httpRouter } from "convex/server";
+import { Webhook } from "svix";
+
+import { internal } from "./_generated/api";
+import { httpAction } from "./_generated/server";
+
+const handleClerkWebhook = httpAction(async (ctx, request) => {
+  const event = await validateRequest(request);
+  if (!event) {
+    return new Response("Invalid request", { status: 400 });
+  }
+  switch (event.type) {
+    case "user.created":
+      await ctx.runMutation(internal.users.createUser, {
+        clerkId: event.data.id,
+        email: event.data.email_addresses[0].email_address,
+        imageUrl: event.data.image_url,
+        name: event.data.first_name as string,
+      });
+      break;
+    case "user.updated":
+      await ctx.runMutation(internal.users.updateUser, {
+        clerkId: event.data.id,
+        imageUrl: event.data.image_url,
+        email: event.data.email_addresses[0].email_address,
+      });
+      break;
+    case "user.deleted":
+      await ctx.runMutation(internal.users.deleteUser, {
+        clerkId: event.data.id as string,
+      });
+      break;
+  }
+  return new Response(null, {
+    status: 200,
+  });
+});
+
+const http = httpRouter();
+
+http.route({
+  path: "/clerk",
+  method: "POST",
+  handler: handleClerkWebhook,
+});
+
+const validateRequest = async (
+  req: Request
+): Promise<WebhookEvent | undefined> => {
+  // key note : add the webhook secret variable to the environment variables field in convex dashboard setting
+  const webhookSecret = process.env.CLERK_WEBHOOK_SECRET!;
+  if (!webhookSecret) {
+    throw new Error("CLERK_WEBHOOK_SECRET is not defined");
+  }
+  const payloadString = await req.text();
+  const headerPayload = req.headers;
+  const svixHeaders = {
+    "svix-id": headerPayload.get("svix-id")!,
+    "svix-timestamp": headerPayload.get("svix-timestamp")!,
+    "svix-signature": headerPayload.get("svix-signature")!,
+  };
+  const wh = new Webhook(webhookSecret);
+  const event = wh.verify(payloadString, svixHeaders);
+  return event as unknown as WebhookEvent;
+};
+
+export default http;
+```
+
+</details>
+
+<details>
+<summary><code>convex/users.ts</code></summary>
+
+```typescript
+import { ConvexError, v } from "convex/values";
+
+import { internalMutation, query } from "./_generated/server";
+
+export const getUserById = query({
+  args: { clerkId: v.string() },
+  handler: async (ctx, args) => {
+    const user = await ctx.db
+      .query("users")
+      .filter((q) => q.eq(q.field("clerkId"), args.clerkId))
+      .unique();
+
+    if (!user) {
+      throw new ConvexError("User not found");
+    }
+
+    return user;
+  },
+});
+
+// this query is used to get the top user by podcast count. first the podcast is sorted by views and then the user is sorted by total podcasts, so the user with the most podcasts will be at the top.
+export const getTopUserByPodcastCount = query({
+  args: {},
+  handler: async (ctx, args) => {
+    const user = await ctx.db.query("users").collect();
+
+    const userData = await Promise.all(
+      user.map(async (u) => {
+        const podcasts = await ctx.db
+          .query("podcasts")
+          .filter((q) => q.eq(q.field("authorId"), u.clerkId))
+          .collect();
+
+        const sortedPodcasts = podcasts.sort((a, b) => b.views - a.views);
+
+        return {
+          ...u,
+          totalPodcasts: podcasts.length,
+          podcast: sortedPodcasts.map((p) => ({
+            podcastTitle: p.podcastTitle,
+            pocastId: p._id,
+          })),
+        };
+      })
+    );
+
+    return userData.sort((a, b) => b.totalPodcasts - a.totalPodcasts);
+  },
+});
+
+export const createUser = internalMutation({
+  args: {
+    clerkId: v.string(),
+    email: v.string(),
+    imageUrl: v.string(),
+    name: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.insert("users", {
+      clerkId: args.clerkId,
+      email: args.email,
+      imageUrl: args.imageUrl,
+      name: args.name,
+    });
+  },
+});
+
+export const updateUser = internalMutation({
+  args: {
+    clerkId: v.string(),
+    imageUrl: v.string(),
+    email: v.string(),
+  },
+  async handler(ctx, args) {
+    const user = await ctx.db
+      .query("users")
+      .filter((q) => q.eq(q.field("clerkId"), args.clerkId))
+      .unique();
+
+    if (!user) {
+      throw new ConvexError("User not found");
+    }
+
+    await ctx.db.patch(user._id, {
+      imageUrl: args.imageUrl,
+      email: args.email,
+    });
+
+    const podcast = await ctx.db
+      .query("podcasts")
+      .filter((q) => q.eq(q.field("authorId"), args.clerkId))
+      .collect();
+
+    await Promise.all(
+      podcast.map(async (p) => {
+        await ctx.db.patch(p._id, {
+          authorImageUrl: args.imageUrl,
+        });
+      })
+    );
+  },
+});
+
+export const deleteUser = internalMutation({
+  args: { clerkId: v.string() },
+  async handler(ctx, args) {
+    const user = await ctx.db
+      .query("users")
+      .filter((q) => q.eq(q.field("clerkId"), args.clerkId))
+      .unique();
+
+    if (!user) {
+      throw new ConvexError("User not found");
+    }
+
+    await ctx.db.delete(user._id);
+  },
+});
+```
+
+</details>
+
+<details>
+<summary><code>types/index.ts</code></summary>
+
+```typescript
+/* eslint-disable no-unused-vars */
+
+import { Dispatch, SetStateAction } from "react";
+
+import { Id } from "@/convex/_generated/dataModel";
+
+export interface EmptyStateProps {
+  title: string;
+  search?: boolean;
+  buttonText?: string;
+  buttonLink?: string;
+}
+
+export interface TopPodcastersProps {
+  _id: Id<"users">;
+  _creationTime: number;
+  email: string;
+  imageUrl: string;
+  clerkId: string;
+  name: string;
+  podcast: {
+    podcastTitle: string;
+    pocastId: Id<"podcasts">;
+  }[];
+  totalPodcasts: number;
+}
+
+export interface PodcastProps {
+  _id: Id<"podcasts">;
+  _creationTime: number;
+  audioStorageId: Id<"_storage"> | null;
+  user: Id<"users">;
+  podcastTitle: string;
+  podcastDescription: string;
+  audioUrl: string | null;
+  imageUrl: string | null;
+  imageStorageId: Id<"_storage"> | null;
+  author: string;
+  authorId: string;
+  authorImageUrl: string;
+  voicePrompt: string;
+  imagePrompt: string | null;
+  voiceType: string;
+  audioDuration: number;
+  views: number;
+}
+
+export interface ProfilePodcastProps {
+  podcasts: PodcastProps[];
+  listeners: number;
+}
+
+export type VoiceType =
+  | "alloy"
+  | "echo"
+  | "fable"
+  | "onyx"
+  | "nova"
+  | "shimmer";
+
+export interface GeneratePodcastProps {
+  voiceType: VoiceType;
+  setAudio: Dispatch<SetStateAction<string>>;
+  audio: string;
+  setAudioStorageId: Dispatch<SetStateAction<Id<"_storage"> | null>>;
+  voicePrompt: string;
+  setVoicePrompt: Dispatch<SetStateAction<string>>;
+  setAudioDuration: Dispatch<SetStateAction<number>>;
+}
+
+export interface GenerateThumbnailProps {
+  setImage: Dispatch<SetStateAction<string>>;
+  setImageStorageId: Dispatch<SetStateAction<Id<"_storage"> | null>>;
+  image: string;
+  imagePrompt: string;
+  setImagePrompt: Dispatch<SetStateAction<string>>;
+}
+
+export interface LatestPodcastCardProps {
+  imgUrl: string;
+  title: string;
+  duration: string;
+  index: number;
+  audioUrl: string;
+  author: string;
+  views: number;
+  podcastId: Id<"podcasts">;
+}
+
+export interface PodcastDetailPlayerProps {
+  audioUrl: string;
+  podcastTitle: string;
+  author: string;
+  isOwner: boolean;
+  imageUrl: string;
+  podcastId: Id<"podcasts">;
+  imageStorageId: Id<"_storage">;
+  audioStorageId: Id<"_storage">;
+  authorImageUrl: string;
+  authorId: string;
+}
+
+export interface AudioProps {
+  title: string;
+  audioUrl: string;
+  author: string;
+  imageUrl: string;
+  podcastId: string;
+}
+
+export interface AudioContextType {
+  audio: AudioProps | undefined;
+  setAudio: React.Dispatch<React.SetStateAction<AudioProps | undefined>>;
+}
+
+export interface PodcastCardProps {
+  imgUrl: string;
+  title: string;
+  description: string;
+  podcastId: Id<"podcasts">;
+}
+
+export interface CarouselProps {
+  fansLikeDetail: TopPodcastersProps[];
+}
+
+export interface ProfileCardProps {
+  podcastData: ProfilePodcastProps;
+  imageUrl: string;
+  userFirstName: string;
+}
+
+export type UseDotButtonType = {
+  selectedIndex: number;
+  scrollSnaps: number[];
+  onDotButtonClick: (index: number) => void;
+};
+```
+
+</details>
+
+<details>
+<summary><code>convex/podcasts.ts</code></summary>
+
+```typescript
+import { ConvexError, v } from "convex/values";
+
+import { mutation, query } from "./_generated/server";
+
+// create podcast mutation
+export const createPodcast = mutation({
+  args: {
+    audioStorageId: v.union(v.id("_storage"), v.null()),
+    podcastTitle: v.string(),
+    podcastDescription: v.string(),
+    audioUrl: v.string(),
+    imageUrl: v.string(),
+    imageStorageId: v.union(v.id("_storage"), v.null()),
+    voicePrompt: v.string(),
+    imagePrompt: v.string(),
+    voiceType: v.string(),
+    views: v.number(),
+    audioDuration: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+
+    if (!identity) {
+      throw new ConvexError("User not authenticated");
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .filter((q) => q.eq(q.field("email"), identity.email))
+      .collect();
+
+    if (user.length === 0) {
+      throw new ConvexError("User not found");
+    }
+
+    return await ctx.db.insert("podcasts", {
+      audioStorageId: args.audioStorageId,
+      user: user[0]._id,
+      podcastTitle: args.podcastTitle,
+      podcastDescription: args.podcastDescription,
+      audioUrl: args.audioUrl,
+      imageUrl: args.imageUrl,
+      imageStorageId: args.imageStorageId,
+      author: user[0].name,
+      authorId: user[0].clerkId,
+      voicePrompt: args.voicePrompt,
+      imagePrompt: args.imagePrompt,
+      voiceType: args.voiceType,
+      views: args.views,
+      authorImageUrl: user[0].imageUrl,
+      audioDuration: args.audioDuration,
+    });
+  },
+});
+
+// this mutation is required to generate the url after uploading the file to the storage.
+export const getUrl = mutation({
+  args: {
+    storageId: v.id("_storage"),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.storage.getUrl(args.storageId);
+  },
+});
+
+// this query will get all the podcasts based on the voiceType of the podcast , which we are showing in the Similar Podcasts section.
+export const getPodcastByVoiceType = query({
+  args: {
+    podcastId: v.id("podcasts"),
+  },
+  handler: async (ctx, args) => {
+    const podcast = await ctx.db.get(args.podcastId);
+
+    return await ctx.db
+      .query("podcasts")
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("voiceType"), podcast?.voiceType),
+          q.neq(q.field("_id"), args.podcastId)
+        )
+      )
+      .collect();
+  },
+});
+
+// this query will get all the podcasts.
+export const getAllPodcasts = query({
+  handler: async (ctx) => {
+    return await ctx.db.query("podcasts").order("desc").collect();
+  },
+});
+
+// this query will get the podcast by the podcastId.
+export const getPodcastById = query({
+  args: {
+    podcastId: v.id("podcasts"),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.podcastId);
+  },
+});
+
+// this query will get the podcasts based on the views of the podcast , which we are showing in the Trending Podcasts section.
+export const getTrendingPodcasts = query({
+  handler: async (ctx) => {
+    const podcast = await ctx.db.query("podcasts").collect();
+
+    return podcast.sort((a, b) => b.views - a.views).slice(0, 8);
+  },
+});
+
+// this query will get the podcast by the authorId.
+export const getPodcastByAuthorId = query({
+  args: {
+    authorId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const podcasts = await ctx.db
+      .query("podcasts")
+      .filter((q) => q.eq(q.field("authorId"), args.authorId))
+      .collect();
+
+    const totalListeners = podcasts.reduce(
+      (sum, podcast) => sum + podcast.views,
+      0
+    );
+
+    return { podcasts, listeners: totalListeners };
+  },
+});
+
+// this query will get the podcast by the search query.
+export const getPodcastBySearch = query({
+  args: {
+    search: v.string(),
+  },
+  handler: async (ctx, args) => {
+    if (args.search === "") {
+      return await ctx.db.query("podcasts").order("desc").collect();
+    }
+
+    const authorSearch = await ctx.db
+      .query("podcasts")
+      .withSearchIndex("search_author", (q) => q.search("author", args.search))
+      .take(10);
+
+    if (authorSearch.length > 0) {
+      return authorSearch;
+    }
+
+    const titleSearch = await ctx.db
+      .query("podcasts")
+      .withSearchIndex("search_title", (q) =>
+        q.search("podcastTitle", args.search)
+      )
+      .take(10);
+
+    if (titleSearch.length > 0) {
+      return titleSearch;
+    }
+
+    return await ctx.db
+      .query("podcasts")
+      .withSearchIndex("search_body", (q) =>
+        q.search("podcastDescription" || "podcastTitle", args.search)
+      )
+      .take(10);
+  },
+});
+
+// this mutation will update the views of the podcast.
+export const updatePodcastViews = mutation({
+  args: {
+    podcastId: v.id("podcasts"),
+  },
+  handler: async (ctx, args) => {
+    const podcast = await ctx.db.get(args.podcastId);
+
+    if (!podcast) {
+      throw new ConvexError("Podcast not found");
+    }
+
+    return await ctx.db.patch(args.podcastId, {
+      views: podcast.views + 1,
+    });
+  },
+});
+
+// this mutation will delete the podcast.
+export const deletePodcast = mutation({
+  args: {
+    podcastId: v.id("podcasts"),
+    imageStorageId: v.id("_storage"),
+    audioStorageId: v.id("_storage"),
+  },
+  handler: async (ctx, args) => {
+    const podcast = await ctx.db.get(args.podcastId);
+
+    if (!podcast) {
+      throw new ConvexError("Podcast not found");
+    }
+
+    await ctx.storage.delete(args.imageStorageId);
+    await ctx.storage.delete(args.audioStorageId);
+    return await ctx.db.delete(args.podcastId);
+  },
+});
+```
+
+</details>
+
+<details>
+<summary><code>components/PodcastDetailPlayer.ts</code></summary>
+
+```typescript
+"use client";
+import { useMutation } from "convex/react";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+
+import { api } from "@/convex/_generated/api";
+import { useAudio } from "@/providers/AudioProvider";
+import { PodcastDetailPlayerProps } from "@/types";
+
+import LoaderSpinner from "./Loader";
+import { Button } from "./ui/button";
+import { useToast } from "./ui/use-toast";
+
+const PodcastDetailPlayer = ({
+  audioUrl,
+  podcastTitle,
+  author,
+  imageUrl,
+  podcastId,
+  imageStorageId,
+  audioStorageId,
+  isOwner,
+  authorImageUrl,
+  authorId,
+}: PodcastDetailPlayerProps) => {
+  const router = useRouter();
+  const { setAudio } = useAudio();
+  const { toast } = useToast();
+  const [isDeleting, setIsDeleting] = useState(false);
+  const deletePodcast = useMutation(api.podcasts.deletePodcast);
+
+  const handleDelete = async () => {
+    try {
+      await deletePodcast({ podcastId, imageStorageId, audioStorageId });
+      toast({
+        title: "Podcast deleted",
+      });
+      router.push("/");
+    } catch (error) {
+      console.error("Error deleting podcast", error);
+      toast({
+        title: "Error deleting podcast",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handlePlay = () => {
+    setAudio({
+      title: podcastTitle,
+      audioUrl,
+      imageUrl,
+      author,
+      podcastId,
+    });
+  };
+
+  if (!imageUrl || !authorImageUrl) return <LoaderSpinner />;
+
+  return (
+    <div className="mt-6 flex w-full justify-between max-md:justify-center">
+      <div className="flex flex-col gap-8 max-md:items-center md:flex-row">
+        <Image
+          src={imageUrl}
+          width={250}
+          height={250}
+          alt="Podcast image"
+          className="aspect-square rounded-lg"
+        />
+        <div className="flex w-full flex-col gap-5 max-md:items-center md:gap-9">
+          <article className="flex flex-col gap-2 max-md:items-center">
+            <h1 className="text-32 font-extrabold tracking-[-0.32px] text-white-1">
+              {podcastTitle}
+            </h1>
+            <figure
+              className="flex cursor-pointer items-center gap-2"
+              onClick={() => {
+                router.push(`/profile/${authorId}`);
+              }}
+            >
+              <Image
+                src={authorImageUrl}
+                width={30}
+                height={30}
+                alt="Caster icon"
+                className="size-[30px] rounded-full object-cover"
+              />
+              <h2 className="text-16 font-normal text-white-3">{author}</h2>
+            </figure>
+          </article>
+
+          <Button
+            onClick={handlePlay}
+            className="text-16 w-full max-w-[250px] bg-orange-1 font-extrabold text-white-1"
+          >
+            <Image
+              src="/icons/Play.svg"
+              width={20}
+              height={20}
+              alt="random play"
+            />{" "}
+            &nbsp; Play podcast
+          </Button>
+        </div>
+      </div>
+      {isOwner && (
+        <div className="relative mt-2">
+          <Image
+            src="/icons/three-dots.svg"
+            width={20}
+            height={30}
+            alt="Three dots icon"
+            className="cursor-pointer"
+            onClick={() => setIsDeleting((prev) => !prev)}
+          />
+          {isDeleting && (
+            <div
+              className="absolute -left-32 -top-2 z-10 flex w-32 cursor-pointer justify-center gap-2 rounded-md bg-black-6 py-1.5 hover:bg-black-2"
+              onClick={handleDelete}
+            >
+              <Image
+                src="/icons/delete.svg"
+                width={16}
+                height={16}
+                alt="Delete icon"
+              />
+              <h2 className="text-16 font-normal text-white-1">Delete</h2>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default PodcastDetailPlayer;
+```
 
 </details>
 
